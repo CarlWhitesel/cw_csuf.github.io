@@ -1,650 +1,71 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Car Price Predictor</title>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <style>
-    /* ─── TOKENS ─── */
-    :root {
-      --bg:        #0d0f14;
-      --surface:   #151820;
-      --surface2:  #1c2030;
-      --border:    #252a3a;
-      --accent:    #e8c547;
-      --accent2:   #4fd1a5;
-      --muted:     #5a6278;
-      --text:      #dce3f0;
-      --text-dim:  #8b95ae;
-      --red:       #f06060;
-      --radius:    10px;
-      --track-h:   4px;
-      --thumb-r:   12px;
-    }
+// 1. COEFFICIENTS (B)
+  const B = [
+    7.310039e+00, 1.552768e-01, -3.179511e-01, -2.407905e-01, -9.641265e-02,
+    1.373760e-01, -1.088114e+01, 5.938394e-04, 4.106549e-02, 4.182580e-01,
+    7.204869e-05, -3.412160e-04, 1.388708e-03
+  ];
 
-    /* ─── RESET ─── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: 'Space Mono', monospace;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      padding: 0 0 80px;
-      line-height: 1.6;
-    }
-
-    /* ─── HERO ─── */
-    .hero {
-      position: relative;
-      padding: 60px 40px 50px;
-      overflow: hidden;
-      border-bottom: 1px solid var(--border);
-    }
-    .hero::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background:
-        radial-gradient(ellipse 60% 80% at 80% 50%, rgba(232,197,71,.07) 0%, transparent 70%),
-        radial-gradient(ellipse 40% 60% at 20% 50%, rgba(79,209,165,.05) 0%, transparent 70%);
-      pointer-events: none;
-    }
-    .hero-label {
-      font-size: 11px;
-      letter-spacing: .2em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 14px;
-    }
-    .hero h1 {
-      font-family: 'Syne', sans-serif;
-      font-size: clamp(2rem, 5vw, 3.6rem);
-      font-weight: 800;
-      line-height: 1.1;
-      color: var(--text);
-    }
-    .hero h1 span { color: var(--accent); }
-    .hero-sub {
-      margin-top: 14px;
-      color: var(--text-dim);
-      font-size: 13px;
-      max-width: 540px;
-    }
-
-    /* model tag chips */
-    .model-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 18px;
-    }
-    .model-tag {
-      font-size: 10px;
-      letter-spacing: .12em;
-      text-transform: uppercase;
-      padding: 4px 10px;
-      border-radius: 4px;
-      border: 1px solid var(--border);
-      color: var(--text-dim);
-      background: var(--surface2);
-    }
-    .model-tag.active { border-color: rgba(232,197,71,.4); color: var(--accent); background: rgba(232,197,71,.06); }
-
-    /* ─── LAYOUT ─── */
-    .layout {
-      display: grid;
-      grid-template-columns: 1fr 400px;
-      gap: 0;
-      max-width: 1220px;
-      margin: 0 auto;
-      padding: 40px 40px 0;
-    }
-    @media (max-width: 940px) {
-      .layout { grid-template-columns: 1fr; padding: 24px 20px 0; }
-      .hero { padding: 40px 20px 36px; }
-    }
-
-    /* ─── CONTROLS PANEL ─── */
-    .controls { padding-right: 44px; }
-    .section-title {
-      font-family: 'Syne', sans-serif;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: .18em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 24px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .section-title::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--border);
-    }
-
-    /* ─── SLIDER ─── */
-    .slider-group { margin-bottom: 28px; }
-    .slider-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-bottom: 10px;
-    }
-    .slider-label { font-size: 12px; color: var(--text-dim); letter-spacing: .05em; }
-    .slider-meta  { font-size: 10px; color: var(--muted); margin-left: 6px; }
-    .slider-value {
-      font-family: 'Syne', sans-serif;
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--text);
-      min-width: 60px;
-      text-align: right;
-    }
-    .slider-value .unit {
-      font-size: 11px;
-      color: var(--muted);
-      margin-left: 3px;
-      font-family: 'Space Mono', monospace;
-    }
-
-    input[type=range] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: var(--track-h);
-      border-radius: 2px;
-      background: var(--border);
-      outline: none;
-      cursor: pointer;
-    }
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: calc(var(--thumb-r) * 2);
-      height: calc(var(--thumb-r) * 2);
-      border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 0 3px rgba(232,197,71,.2);
-      transition: box-shadow .15s, transform .15s;
-    }
-    input[type=range]::-webkit-slider-thumb:hover {
-      box-shadow: 0 0 0 6px rgba(232,197,71,.25);
-      transform: scale(1.1);
-    }
-    input[type=range]::-moz-range-thumb {
-      width: calc(var(--thumb-r) * 2);
-      height: calc(var(--thumb-r) * 2);
-      border-radius: 50%;
-      border: none;
-      background: var(--accent);
-    }
-    input[type=range].filled {
-      background: linear-gradient(
-        to right,
-        var(--accent) 0%,
-        var(--accent) var(--pct, 50%),
-        var(--border) var(--pct, 50%),
-        var(--border) 100%
-      );
-    }
-    input[type=range].filled-teal {
-      background: linear-gradient(
-        to right,
-        var(--accent2) 0%,
-        var(--accent2) var(--pct, 50%),
-        var(--border) var(--pct, 50%),
-        var(--border) 100%
-      );
-    }
-    input[type=range].filled-teal::-webkit-slider-thumb { background: var(--accent2); box-shadow: 0 0 0 3px rgba(79,209,165,.2); }
-    input[type=range].filled-teal::-webkit-slider-thumb:hover { box-shadow: 0 0 0 6px rgba(79,209,165,.25); }
-
-    /* ─── CYLINDERS BUTTON GROUP ─── */
-    .cyl-group { margin-bottom: 28px; }
-    .cyl-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-bottom: 10px;
-    }
-    .cyl-hint { font-size: 10px; color: var(--muted); letter-spacing: .06em; }
-    .cyl-buttons {
-      display: flex;
-      gap: 8px;
-    }
-    .cyl-btn {
-      flex: 1;
-      padding: 12px 0;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--surface2);
-      color: var(--text-dim);
-      font-family: 'Syne', sans-serif;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: border-color .15s, background .15s, color .15s, box-shadow .15s;
-      text-align: center;
-    }
-    .cyl-btn .cyl-sub { display: block; font-size: 9px; font-family: 'Space Mono', monospace; font-weight: 400; color: var(--muted); margin-top: 2px; letter-spacing: .08em; }
-    .cyl-btn:hover { border-color: rgba(232,197,71,.4); color: var(--text); }
-    .cyl-btn.selected {
-      border-color: var(--accent);
-      background: rgba(232,197,71,.08);
-      color: var(--accent);
-      box-shadow: 0 0 12px rgba(232,197,71,.12);
-    }
-    .cyl-btn.selected .cyl-sub { color: rgba(232,197,71,.6); }
-
-    /* Toggle for Hybrid */
-    .toggle-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 28px;
-    }
-    .toggle-label { font-size: 12px; color: var(--text-dim); letter-spacing: .05em; }
-    .toggle-wrap { display: flex; align-items: center; gap: 10px; }
-    .toggle-status {
-      font-family: 'Syne', sans-serif;
-      font-size: 13px;
-      font-weight: 700;
-      min-width: 28px;
-      text-align: right;
-    }
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 44px;
-      height: 24px;
-    }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .slider-bg {
-      position: absolute;
-      inset: 0;
-      background: var(--border);
-      border-radius: 12px;
-      transition: background .2s;
-    }
-    .slider-bg::before {
-      content: '';
-      position: absolute;
-      height: 18px;
-      width: 18px;
-      left: 3px;
-      top: 3px;
-      background: var(--muted);
-      border-radius: 50%;
-      transition: transform .2s, background .2s;
-    }
-    .switch input:checked + .slider-bg { background: rgba(79,209,165,.25); border: 1px solid var(--accent2); }
-    .switch input:checked + .slider-bg::before { transform: translateX(20px); background: var(--accent2); }
-
-    /* ─── OUTPUT PANEL ─── */
-    .output-panel {
-      position: sticky;
-      top: 30px;
-      align-self: start;
-    }
-    .result-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    .result-top {
-      padding: 28px 28px 20px;
-      border-bottom: 1px solid var(--border);
-    }
-    .result-eyebrow {
-      font-size: 10px;
-      letter-spacing: .2em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }
-    .result-price {
-      font-family: 'Syne', sans-serif;
-      font-size: 46px;
-      font-weight: 800;
-      color: var(--accent);
-      line-height: 1;
-      margin-bottom: 6px;
-      letter-spacing: -.01em;
-    }
-    .result-price .dollar { font-size: 28px; color: rgba(232,197,71,.6); vertical-align: super; margin-right: 2px; }
-    .result-ci { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-top: 16px; margin-bottom: 10px; }
-    .ci-range { display: flex; gap: 12px; }
-    .ci-item {
-      flex: 1;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 12px;
-    }
-    .ci-item-label { font-size: 9px; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
-    .ci-item-val { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; color: var(--text); }
-
-    .result-bottom { padding: 20px 28px 24px; }
-    .formula-title {
-      font-size: 10px;
-      letter-spacing: .15em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 12px;
-    }
-    .formula-box {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 14px;
-      font-size: 10.5px;
-      line-height: 1.9;
-      color: var(--text-dim);
-      overflow-x: auto;
-    }
-    .formula-box .hl  { color: var(--accent2); }
-    .formula-box .val { color: var(--accent); }
-    .formula-box .int { color: rgba(232,197,71,.55); font-size: 9.5px; }
-
-    .log-val {
-      margin-top: 12px;
-      background: var(--surface2);
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      padding: 10px 14px;
-      font-size: 12px;
-      color: var(--text-dim);
-      display: flex;
-      justify-content: space-between;
-    }
-    .log-val span { color: var(--text); font-weight: 700; }
-
-    /* ─── MODEL INFO STRIP ─── */
-    .model-strip {
-      max-width: 1220px;
-      margin: 36px auto 0;
-      padding: 0 40px;
-    }
-    @media (max-width: 940px) { .model-strip { padding: 0 20px; } }
-    .model-strip-inner {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px 24px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 24px;
-    }
-    .stat-item { flex: 1; min-width: 100px; }
-    .stat-label { font-size: 9px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
-    .stat-val { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; color: var(--text); }
-    .stat-val .stat-sub { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; font-weight: 400; margin-left: 4px; }
-
-    /* ─── FLASH ANIMATION ─── */
-    @keyframes flash {
-      0%   { color: var(--accent2); }
-      100% { color: var(--accent); }
-    }
-    .flash { animation: flash .3s ease-out; }
-  </style>
-</head>
-<body>
-
-<header class="hero">
-  <p class="hero-label">OLS · log(SRP) · Inverse MPG</p>
-  <h1>Car Price<br><span>Predictor</span></h1>
-  <p class="hero-sub">
-    Linear model predicting log-transformed suggested retail price from vehicle specs,
-    including cylinder–engine and weight–MPG interactions.
-  </p>
-  <div class="model-tags">
-    <span class="model-tag active">log(SRP) response</span>
-    <span class="model-tag active">sqrt(Horsepower)</span>
-    <span class="model-tag active">1/HighwayMPG</span>
-    <span class="model-tag active">EngineSize × Cylinders</span>
-    <span class="model-tag active">Cylinders × Weight</span>
-    <span class="model-tag active">Weight × (1/MPG)</span>
-    <span class="model-tag">Cylinders ∈ {4, 6, 8}</span>
-  </div>
-</header>
-
-<div class="layout">
-
-  <div class="controls">
-    <p class="section-title">Vehicle Specifications</p>
-
-    <div class="toggle-row">
-      <span class="toggle-label">HYBRID POWERTRAIN</span>
-      <div class="toggle-wrap">
-        <span class="toggle-status" id="hybrid-status">No</span>
-        <label class="switch">
-          <input type="checkbox" id="hybrid-toggle" onchange="updateAll()" />
-          <span class="slider-bg"></span>
-        </label>
-      </div>
-    </div>
-
-    <div class="cyl-group">
-      <div class="cyl-header">
-        <span class="slider-label">CYLINDERS <span class="slider-meta">(factor — 4 / 6 / 8)</span></span>
-      </div>
-      <div class="cyl-buttons" id="cyl-group">
-        <button class="cyl-btn" data-cyl="4" onclick="selectCyl(4)">4<span class="cyl-sub">FOUR</span></button>
-        <button class="cyl-btn selected" data-cyl="6" onclick="selectCyl(6)">6<span class="cyl-sub">SIX</span></button>
-        <button class="cyl-btn" data-cyl="8" onclick="selectCyl(8)">8<span class="cyl-sub">EIGHT</span></button>
-      </div>
-    </div>
-
-    <div class="slider-group">
-      <div class="slider-header">
-        <span class="slider-label">ENGINE SIZE</span>
-        <span class="slider-value" id="val-engine">3.5<span class="unit">L</span></span>
-      </div>
-      <input type="range" id="sl-engine" class="filled" min="1.0" max="8.0" step="0.1" value="3.5"
-             oninput="syncSlider(this,'val-engine','L');updateAll()"/>
-    </div>
-
-    <div class="slider-group">
-      <div class="slider-header">
-        <span class="slider-label">HORSEPOWER <span class="slider-meta">(√ applied in model)</span></span>
-        <span class="slider-value" id="val-hp">210<span class="unit">hp</span></span>
-      </div>
-      <input type="range" id="sl-hp" class="filled" min="50" max="600" step="5" value="210"
-             oninput="syncSlider(this,'val-hp','hp');updateAll()"/>
-    </div>
-
-    <div class="slider-group">
-      <div class="slider-header">
-        <span class="slider-label">HIGHWAY MPG <span class="slider-meta">(1/x applied in model)</span></span>
-        <span class="slider-value" id="val-mpg">29<span class="unit">mpg</span></span>
-      </div>
-      <input type="range" id="sl-mpg" class="filled-teal" min="10" max="60" step="1" value="29"
-             oninput="syncSlider(this,'val-mpg','mpg');updateAll()"/>
-    </div>
-
-    <div class="slider-group">
-      <div class="slider-header">
-        <span class="slider-label">WEIGHT</span>
-        <span class="slider-value" id="val-weight">4210<span class="unit">lbs</span></span>
-      </div>
-      <input type="range" id="sl-weight" class="filled" min="1500" max="7000" step="10" value="4210"
-             oninput="syncSlider(this,'val-weight','lbs');updateAll()"/>
-    </div>
-
-  </div>
-
-  <div class="output-panel">
-    <div class="result-card">
-      <div class="result-top">
-        <p class="result-eyebrow">Predicted Retail Price</p>
-        <div class="result-price" id="result-price"><span class="dollar">$</span><span id="price-int">--,---</span></div>
-        <p class="result-ci">95% Confidence Interval</p>
-        <div class="ci-range">
-          <div class="ci-item">
-            <div class="ci-item-label">Lower</div>
-            <div class="ci-item-val" id="ci-low">—</div>
-          </div>
-          <div class="ci-item">
-            <div class="ci-item-label">Upper</div>
-            <div class="ci-item-val" id="ci-high">—</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="result-bottom">
-        <p class="formula-title">Linear Predictor — model_weighted_v2</p>
-        <div class="formula-box" id="formula-box"></div>
-        <div class="log-val">
-          <span>log(SRP) =</span>
-          <span id="log-pred">—</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<div class="model-strip">
-  <div class="model-strip-inner">
-    <div class="stat-item">
-      <div class="stat-label">Response</div>
-      <div class="stat-val">log(SRP)<span class="stat-sub">→ exp( ) for $</span></div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">Cylinders coding</div>
-      <div class="stat-val">dummy<span class="stat-sub">4-cyl baseline</span></div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">HP transform</div>
-      <div class="stat-val">√<span class="stat-sub">sqrt_Horsepower</span></div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">MPG transform</div>
-      <div class="stat-val">1/x<span class="stat-sub">inv_HighwayMPG</span></div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">Interactions</div>
-      <div class="stat-val">3<span class="stat-sub">terms</span></div>
-    </div>
-  </div>
-</div>
-
-<script>
-  // ─────────────────────────────────────────────────────────────────────────────
-  // UPDATED COEFFICIENTS (model_weighted_v2)
-  // ─────────────────────────────────────────────────────────────────────────────
-  const B = {
-    intercept:       7.310039e+00,
-    hybrid1:         1.552768e-01,
-    engineSize:     -3.179511e-01,
-    cyl6:           -2.407905e-01,
-    cyl8:           -9.641265e-02,
-    sqrtHP:          1.373760e-01,
-    invMPG:         -1.088114e+01,
-    weight:          5.938394e-04,
-    // Interaction terms
-    engineSize_cyl6: 4.106549e-02,
-    engineSize_cyl8: 4.182580e-01,
-    cyl6_weight:     7.204869e-05,
-    cyl8_weight:    -3.412160e-04,
-    weight_invMPG:   1.388708e-03 
-  };
-
-  // Back-calculated SE_LOG for CI
-  const SE_LOG = (Math.log(45268.83) - Math.log(39077.12)) / (2 * 1.96);
-
-  let selectedCyl = 6;
-
-  function selectCyl(val) {
-    selectedCyl = val;
-    document.querySelectorAll('.cyl-btn').forEach(btn => {
-      btn.classList.toggle('selected', parseInt(btn.dataset.cyl) === val);
-    });
-    updateAll();
-  }
-
-  function syncSlider(el, valId, unit) {
-    const min = parseFloat(el.min), max = parseFloat(el.max), val = parseFloat(el.value);
-    el.style.setProperty('--pct', ((val - min) / (max - min)) * 100 + '%');
-    const disp = Number.isInteger(val) ? val : val.toFixed(1);
-    document.getElementById(valId).innerHTML = disp + (unit ? `<span class="unit">${unit}</span>` : '');
-  }
-
-  document.querySelectorAll('input[type=range]').forEach(el => {
-    const min = parseFloat(el.min), max = parseFloat(el.max), val = parseFloat(el.value);
-    el.style.setProperty('--pct', ((val - min) / (max - min)) * 100 + '%');
-  });
+  // 2. VARIANCE-COVARIANCE MATRIX (VCOV)
+  const VCOV = [
+    [ 5.351286e-01, -2.234544e-02,  9.285813e-03,  1.820279e-01,  2.380923e-01, -1.494544e-03, -1.843925e+01, -1.633940e-04, -5.459100e-03, -2.055415e-02, -5.191724e-05, -5.204754e-05,  5.617998e-03],
+    [-2.234544e-02,  1.735194e-02,  2.367154e-03, -6.736654e-03, -1.384480e-02,  1.303970e-04,  8.130561e-01,  2.885799e-06, -2.291496e-03, -2.432493e-03,  3.599847e-06,  5.500386e-06, -1.990850e-04],
+    [ 9.285813e-03,  2.367154e-03,  6.004338e-03,  7.967811e-03,  1.017969e-02, -3.718631e-05, -4.614139e-01, -6.422838e-06, -5.977972e-03, -6.138310e-03,  1.716768e-06,  1.305578e-06,  1.291235e-04],
+    [ 1.820279e-01, -6.736654e-03,  7.967811e-03,  1.901405e-01,  1.217968e-01, -5.246939e-04, -7.275354e+00, -5.668942e-05, -9.628140e-03, -1.194335e-02, -5.003120e-05, -2.751643e-05,  2.185232e-03],
+    [ 2.380923e-01, -1.384480e-02,  1.017969e-02,  1.217968e-01,  5.295271e-01, -2.936749e-03, -9.028388e+00, -6.395463e-05, -7.082364e-03, -4.779283e-02, -3.300762e-05, -8.995642e-05,  2.673492e-03],
+    [-1.494544e-03,  1.303970e-04, -3.718631e-05, -5.246939e-04, -2.936749e-03,  1.484124e-04,  2.134194e-02,  4.837524e-08, -1.094937e-04,  2.618306e-04,  2.375830e-07,  4.283116e-07, -1.143528e-05],
+    [-1.843925e+01,  8.130561e-01, -4.614139e-01, -7.275354e+00, -9.028388e+00,  2.134194e-02,  6.732834e+02,  5.670230e-03,  3.741517e-01,  7.817190e-01,  1.983806e-03,  2.064807e-03, -2.006659e-01],
+    [-1.633940e-04,  2.885799e-06, -6.422838e-06, -5.668942e-05, -6.395463e-05,  4.837524e-08,  5.670230e-03,  5.522922e-08,  5.355732e-06,  9.911996e-06,  1.372689e-08,  1.152670e-08, -1.761612e-06],
+    [-5.459100e-03, -2.291496e-03, -5.977972e-03, -9.628140e-03, -7.082364e-03, -1.094937e-04,  3.741517e-01,  5.355732e-06,  8.095473e-03,  5.734991e-03, -3.180027e-06, -1.700748e-06, -8.836497e-05],
+    [-2.055415e-02, -2.432493e-03, -6.138310e-03, -1.194335e-02, -4.779283e-02,  2.618306e-04,  7.817190e-01,  9.911996e-06,  5.734991e-03,  1.636616e-02, -2.552887e-07, -2.959286e-06, -2.528918e-04],
+    [-5.191724e-05,  3.599847e-06,  1.716768e-06, -5.003120e-05, -3.300762e-05,  2.375830e-07,  1.983806e-03,  1.372689e-08, -3.180027e-06, -2.552887e-07,  1.767300e-08,  9.826904e-09, -6.177302e-07],
+    [-5.204754e-05,  5.500386e-06,  1.305578e-06, -2.751643e-05, -8.995642e-05,  4.283116e-07,  2.064807e-03,  1.152670e-08, -1.700748e-06, -2.959286e-06,  9.826904e-09,  2.688644e-08, -5.904685e-07],
+    [ 5.617998e-03, -1.990850e-04,  1.291235e-04,  2.185232e-03,  2.673492e-03, -1.143528e-05, -2.006659e-01, -1.761612e-06, -8.836497e-05, -2.528918e-04, -6.177302e-07, -5.904685e-07,  6.160424e-05]
+  ];
 
   function updateAll() {
-    const hybrid      = document.getElementById('hybrid-toggle').checked ? 1 : 0;
-    const engineSize  = parseFloat(document.getElementById('sl-engine').value);
-    const horsepower  = parseFloat(document.getElementById('sl-hp').value);
-    const mpg          = parseFloat(document.getElementById('sl-mpg').value);
-    const weight       = parseFloat(document.getElementById('sl-weight').value);
+    const hybrid = document.getElementById('hybrid-toggle').checked ? 1 : 0;
+    const engineSize = parseFloat(document.getElementById('sl-engine').value);
+    const hp = parseFloat(document.getElementById('sl-hp').value);
+    const mpg = parseFloat(document.getElementById('sl-mpg').value);
+    const weight = parseFloat(document.getElementById('sl-weight').value);
 
-    const cyl6 = (selectedCyl === 6) ? 1 : 0;
-    const cyl8 = (selectedCyl === 8) ? 1 : 0;
+    const c6 = (selectedCyl === 6) ? 1 : 0;
+    const c8 = (selectedCyl === 8) ? 1 : 0;
+    const sHP = Math.sqrt(hp);
+    const iMPG = 1 / mpg;
 
-    const sqrtHP  = Math.sqrt(horsepower);
-    const invMPG  = 1 / mpg;
+    // 3. Feature Vector (X0)
+    const X0 = [
+      1, hybrid, engineSize, c6, c8, sHP, iMPG, weight,
+      (engineSize * c6), (engineSize * c8), (c6 * weight), (c8 * weight), (iMPG * weight)
+    ];
 
-    const logPred =
-        B.intercept
-      + B.hybrid1         * hybrid
-      + B.engineSize      * engineSize
-      + B.cyl6            * cyl6
-      + B.cyl8            * cyl8
-      + B.sqrtHP          * sqrtHP
-      + B.invMPG          * invMPG
-      + B.weight          * weight
-      + B.engineSize_cyl6 * engineSize * cyl6
-      + B.engineSize_cyl8 * engineSize * cyl8
-      + B.cyl6_weight     * cyl6 * weight
-      + B.cyl8_weight     * cyl8 * weight
-      + B.weight_invMPG   * weight * invMPG;
+    // 4. Compute Point Estimate: logPred = X0'B
+    let logPred = 0;
+    for (let i = 0; i < B.length; i++) logPred += X0[i] * B[i];
 
+    // 5. Compute Variance: Var = X0' * VCOV * X0
+    let variance = 0;
+    for (let i = 0; i < X0.length; i++) {
+      for (let j = 0; j < X0.length; j++) {
+        variance += X0[i] * X0[j] * VCOV[i][j];
+      }
+    }
+
+    const se_log = Math.sqrt(Math.max(variance, 0));
     const predPrice = Math.exp(logPred);
-    const ciLow     = Math.exp(logPred - 1.96 * SE_LOG);
-    const ciHigh    = Math.exp(logPred + 1.96 * SE_LOG);
 
-    const fmt  = v => '$' + Math.round(v).toLocaleString('en-US');
-    const f4   = v => v.toFixed(4);
-    const f2   = v => v.toFixed(2);
+    // 95% Confidence Interval using Normal Approximation (Z=1.96)
+    const ciLow = Math.exp(logPred - 1.96 * se_log);
+    const ciHigh = Math.exp(logPred + 1.96 * se_log);
 
-    document.getElementById('price-int').textContent = Math.round(predPrice).toLocaleString('en-US');
-    document.getElementById('ci-low').textContent    = fmt(ciLow);
-    document.getElementById('ci-high').textContent   = fmt(ciHigh);
-    document.getElementById('log-pred').textContent  = logPred.toFixed(5);
-
-    document.getElementById('hybrid-status').textContent = hybrid ? 'Yes' : 'No';
-    document.getElementById('hybrid-status').style.color = hybrid ? 'var(--accent2)' : 'var(--text-dim)';
-
-    const cylLabel = `Cyl${selectedCyl === 4 ? '4 (base)' : selectedCyl}`;
-    document.getElementById('formula-box').innerHTML = `
-<span class="hl">log(SRP)</span> = β₀<br>
-&nbsp;&nbsp; + β₁·<span class="hl">Hybrid</span>(<span class="val">${hybrid}</span>)<br>
-&nbsp;&nbsp; + β₂·<span class="hl">EngineSize</span>(<span class="val">${engineSize.toFixed(1)}</span>)<br>
-&nbsp;&nbsp; + β₃·<span class="hl">${cylLabel}</span><br>
-&nbsp;&nbsp; + β₄·<span class="hl">√Horsepower</span>(<span class="val">${f2(sqrtHP)}</span> = √${horsepower})<br>
-&nbsp;&nbsp; + β₅·<span class="hl">1/MPG</span>(<span class="val">${f4(invMPG)}</span> = 1/${mpg})<br>
-&nbsp;&nbsp; + β₆·<span class="hl">Weight</span>(<span class="val">${weight.toLocaleString()}</span>)<br>
-&nbsp;&nbsp; <span class="int">── interactions ──</span><br>
-&nbsp;&nbsp; + β₇·<span class="hl">EngSize×Cyl</span>(<span class="val">${(engineSize*(cyl6||cyl8)).toFixed(2)}</span>)<br>
-&nbsp;&nbsp; + β₈·<span class="hl">Cyl×Weight</span>(<span class="val">${((cyl6||cyl8)*weight).toLocaleString()}</span>)<br>
-&nbsp;&nbsp; + β₉·<span class="hl">Weight×(1/MPG)</span>(<span class="val">${(weight*invMPG).toFixed(2)}</span>)`;
-
-    const priceEl = document.getElementById('result-price');
-    priceEl.classList.remove('flash');
-    void priceEl.offsetWidth;
-    priceEl.classList.add('flash');
+    // Update UI
+    document.getElementById('price-int').textContent = Math.round(predPrice).toLocaleString();
+    document.getElementById('ci-low').textContent = '$' + Math.round(ciLow).toLocaleString();
+    document.getElementById('ci-high').textContent = '$' + Math.round(ciHigh).toLocaleString();
+    
+    // Log details for debugging
+    document.getElementById('formula-box').innerHTML = 
+      `<span class="hl">log(SRP)</span>: ${logPred.toFixed(5)}<br>` +
+      `<span class="hl">SE(log)</span>: ${se_log.toFixed(5)}`;
   }
-
-  updateAll();
-</script>
-</body>
-</html>
